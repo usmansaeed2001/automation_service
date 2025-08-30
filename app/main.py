@@ -6,12 +6,12 @@ Handles router registration, middleware setup, and core application configuratio
 from fastapi import FastAPI, HTTPException
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import webhooks, kajabi_handler
-from app.db.db_connection import db_manager
+from app.routers import kajabi_handler
+from app.db.db_connection import get_db_manager
+import os
 
 # Load environment variables from .env file
 load_dotenv()
-
 
 # Create FastAPI app instance
 app = FastAPI(
@@ -23,14 +23,22 @@ app = FastAPI(
 @app.on_event("startup")
 async def startup():
     """Initialize database connection on startup"""
+    # Initialize database manager with connection string
+    db_manager = get_db_manager()
+    connection_string = os.getenv('DATABASE_URL')
+    if not connection_string:
+        raise ValueError("DATABASE_URL environment variable is required")
+    db_manager.initialize(connection_string)
+    
+    # Connect to the database
     db_manager.connect()
 
 @app.on_event("shutdown")
 async def shutdown():
     """Close database connection on shutdown"""
+    db_manager = get_db_manager()
     db_manager.close()
 
-app.include_router(webhooks.router, prefix="/api/v1", tags=["webhooks"])
 app.include_router(kajabi_handler.router, prefix="/api/v1", tags=["kajabi-handler"])
 
 # Configure CORS middleware
@@ -80,6 +88,7 @@ async def list_tables():
         ORDER BY schemaname, tablename
         """
         
+        db_manager = get_db_manager()
         tables = db_manager.execute_query(query)
         
         # Format the response

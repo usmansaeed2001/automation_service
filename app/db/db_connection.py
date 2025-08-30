@@ -2,17 +2,35 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from contextlib import contextmanager
 import os
+from typing import Optional
 
 class DatabaseManager:
+    _instance: Optional['DatabaseManager'] = None
+    _initialized: bool = False
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(DatabaseManager, cls).__new__(cls)
+        return cls._instance
+    
     def __init__(self):
-        self.connection = None
-        # Get connection string from environment variable
-        self.connection_string = os.getenv('DATABASE_URL')
-        if not self.connection_string:
-            raise ValueError("DATABASE_URL environment variable is required")
+        if not self._initialized:
+            self.connection = None
+            self.connection_string = None
+            self._initialized = True
+    
+    def initialize(self, connection_string: str):
+        """Initialize the database manager with connection string"""
+        if self.connection_string is None:
+            self.connection_string = connection_string
+        else:
+            raise RuntimeError("DatabaseManager already initialized")
     
     def connect(self):
         """Initialize the database connection"""
+        if not self.connection_string:
+            raise RuntimeError("DatabaseManager not initialized. Call initialize() first.")
+        
         if self.connection is None or self.connection.closed:
             self.connection = psycopg2.connect(self.connection_string)
             self.connection.autocommit = False
@@ -50,6 +68,6 @@ class DatabaseManager:
             cursor.execute(query, params)
             return cursor.rowcount
 
-# Global database manager instance
-db_manager = DatabaseManager()
-
+def get_db_manager() -> DatabaseManager:
+    """Factory function to get the database manager instance"""
+    return DatabaseManager()
